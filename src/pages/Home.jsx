@@ -56,11 +56,16 @@ export default function Home() {
   }
 
   const handleLogout = () => {
+    const wasSSO = authUsername.includes('@') // SSO 用戶 username 是 email
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_username')
     localStorage.removeItem('auth_role')
     setAuthUsername('')
     setAuthRole('')
+    // SSO 模式：必須走 Cloudflare logout 才能清 CF_Authorization cookie
+    if (wasSSO) {
+      window.location.href = '/cdn-cgi/access/logout'
+    }
   }
 
   // 進站時嘗試從後端拿身分（Cloudflare Access SSO 通過會自動回 admin/user）

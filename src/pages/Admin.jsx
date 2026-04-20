@@ -146,6 +146,11 @@ export default function Admin() {
     localStorage.removeItem('auth_role')
     setToken('')
     setQuestions([])
+    // SSO 模式（Cloudflare Access）：清 localStorage 不夠，必須走 Cloudflare logout 才能清 CF_Authorization cookie
+    // 否則 reload 又會被 middleware 認回來
+    if (ssoUsername || ssoRole) {
+      window.location.href = '/cdn-cgi/access/logout'
+    }
   }
 
   const load = () => {
