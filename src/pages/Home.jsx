@@ -65,8 +65,16 @@ export default function Home() {
 
   useEffect(() => {
     getCategories()
-      .then(data => { setCategories(['全部', ...data]); setLoadingCats(false) })
-      .catch(() => { setCategories(['全部']); setLoadingCats(false) })
+      .then(data => {
+        // 新格式：[{category, total}]；舊格式（string[]）也兼容
+        const list = Array.isArray(data) && data.length > 0 && typeof data[0] === 'object'
+          ? data
+          : (data || []).map(c => ({ category: c, total: 0 }))
+        const allTotal = list.reduce((s, r) => s + (r.total || 0), 0)
+        setCategories([{ category: '全部', total: allTotal }, ...list])
+        setLoadingCats(false)
+      })
+      .catch(() => { setCategories([{ category: '全部', total: 0 }]); setLoadingCats(false) })
   }, [])
 
   useEffect(() => {
@@ -263,17 +271,19 @@ export default function Home() {
         ) : (
           <div className="flex flex-col gap-1.5">
             {categories.map(c => {
-              const m = masteryMap[c]
-              const total = m?.total || 0
+              const catName = c.category
+              const catTotal = c.total || 0
+              const m = masteryMap[catName]
+              const masteryTotal = m?.total ?? catTotal
               const mastered = m?.mastered || 0
-              const remaining = total - mastered
-              const pct = total > 0 ? (mastered / total) * 100 : 0
+              const remaining = masteryTotal - mastered
+              const pct = masteryTotal > 0 ? (mastered / masteryTotal) * 100 : 0
               const color = progressColor(pct)
-              const selected = category === c
+              const selected = category === catName
               return (
                 <button
-                  key={c}
-                  onClick={() => setCategory(c)}
+                  key={catName}
+                  onClick={() => setCategory(catName)}
                   className={`w-full text-left px-4 py-3 rounded-md border transition-all ${selected
                     ? 'border-primary bg-primary/5'
                     : 'border-border bg-surface hover:border-border-strong'
@@ -281,10 +291,13 @@ export default function Home() {
                 >
                   <div className="flex items-center gap-2.5 mb-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? 'bg-primary' : 'bg-border-strong'}`} />
-                    <span className="flex-1 text-[15px] font-medium text-ink truncate">{c === '全部' ? '全部分類' : c}</span>
-                    {selected && <span className="text-primary text-sm">✓</span>}
+                    <span className="flex-1 text-[15px] font-medium text-ink truncate">{catName === '全部' ? '全部分類' : catName}</span>
+                    {catTotal > 0 && (
+                      <span className="text-[12px] text-ink-soft font-mono shrink-0">{catTotal} 題</span>
+                    )}
+                    {selected && <span className="text-primary text-sm ml-1">✓</span>}
                   </div>
-                  {authUsername && total > 0 && (
+                  {authUsername && masteryTotal > 0 && (
                     <div className="pl-4">
                       <div className="h-1.5 bg-border rounded-full overflow-hidden">
                         <div
@@ -294,7 +307,7 @@ export default function Home() {
                       </div>
                       <div className="flex justify-between mt-1.5 text-[12px] font-mono">
                         <span className="text-ink-soft">
-                          精熟 <span className="font-semibold" style={{ color }}>{mastered}</span> / {total}（剩 {remaining}）
+                          精熟 <span className="font-semibold" style={{ color }}>{mastered}</span> / {masteryTotal}（剩 {remaining}）
                         </span>
                         <span style={{ color }} className="font-semibold">{pct.toFixed(1)}%</span>
                       </div>

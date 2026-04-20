@@ -1,10 +1,18 @@
-// GET /api/questions/categories → 取得所有不重複的分類名稱
+// GET /api/questions/categories → 取得所有分類及其題數
+// 回傳：[{ category: "11502_...", total: 181 }, ...]
 
 export async function onRequestGet({ env }) {
     const result = await env.DB.prepare(
-        `SELECT DISTINCT category FROM questions ORDER BY category ASC`
+        `SELECT category, COUNT(*) AS total
+         FROM questions
+         WHERE category IS NOT NULL AND category != ''
+         GROUP BY category
+         ORDER BY category ASC`
     ).all()
 
-    const categories = result.results.map(r => r.category).filter(Boolean)
-    return Response.json({ success: true, data: categories })
+    const data = (result.results || []).map(r => ({
+        category: r.category,
+        total: r.total,
+    }))
+    return Response.json({ success: true, data })
 }
