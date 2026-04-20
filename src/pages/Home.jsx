@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCategories, getRandomQuestions, getRandomWrongQuestions, login, getMasteryStats } from '../lib/api.js'
+import { getCategories, getRandomQuestions, getRandomWrongQuestions, login, getMasteryStats, getMe } from '../lib/api.js'
 
 // 5 段進度配色 — Claude 暖色調
 function progressColor(pct) {
@@ -62,6 +62,19 @@ export default function Home() {
     setAuthUsername('')
     setAuthRole('')
   }
+
+  // 進站時嘗試從後端拿身分（Cloudflare Access SSO 通過會自動回 admin/user）
+  useEffect(() => {
+    getMe().then(res => {
+      if (res?.authenticated) {
+        setAuthUsername(res.username)
+        setAuthRole(res.role)
+        // 為 attempts 等 mutation API 補一個 token 進 localStorage
+        // 因為這些 endpoint 走 Authorization header，但 SSO 模式下後端會優先用 Cf-Access header
+        // 留空也能 work，但前端 logout 邏輯需要清
+      }
+    }).catch(() => { /* SSO 沒通過或 local dev */ })
+  }, [])
 
   useEffect(() => {
     getCategories()

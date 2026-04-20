@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, login, reorderQuestions, bulkCreateQuestions, getImportFailures, bulkCreateFailures, deleteImportFailure } from '../lib/api.js'
+import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, login, reorderQuestions, bulkCreateQuestions, getImportFailures, bulkCreateFailures, deleteImportFailure, getMe } from '../lib/api.js'
 import { parseDocument } from '../lib/fileParser.js'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -106,6 +106,9 @@ export default function Admin() {
   const [token, setToken] = useState(
     localStorage.getItem('auth_role') === 'admin' ? (localStorage.getItem('auth_token') || '') : ''
   )
+  const [ssoChecked, setSsoChecked] = useState(false)
+  const [ssoRole, setSsoRole] = useState('')
+  const [ssoUsername, setSsoUsername] = useState('')
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
@@ -165,6 +168,19 @@ export default function Admin() {
   }
 
   useEffect(() => { load(); loadFailures() }, [token])
+
+  // 進站時偵測 Cloudflare Access SSO；admin 自動跳過 login form
+  useEffect(() => {
+    getMe().then(res => {
+      if (res?.authenticated) {
+        setSsoRole(res.role)
+        setSsoUsername(res.username)
+        if (res.role === 'admin' && !token) {
+          setToken('sso')   // dummy token，繞過下方 login form；middleware 走 Cf-Access header 驗證
+        }
+      }
+    }).catch(() => { /* ignore */ }).finally(() => setSsoChecked(true))
+  }, [])
 
   const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 2500) }
 

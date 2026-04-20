@@ -85,6 +85,10 @@ export const reorderQuestions = (orderedIds) =>
 export const login = (username, password) =>
   request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
 
+// 取得當前使用者身分（Cloudflare Access SSO 通過後自動帶入；fallback 使用 token）
+export const getMe = () =>
+  request('/auth/me')
+
 // 每分類精熟度統計（per-user）：回 [{ category, total, mastered }, ...]
 export const getMasteryStats = () =>
   request('/stats/mastery')

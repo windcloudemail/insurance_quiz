@@ -1,18 +1,38 @@
-// Middleware：CORS + 解析 Authorization + 路徑權限驗證
-// token 格式：
-//   legacy admin：v1-admin-token-secure
-//   new：{role}-{userId}-{random}   role='admin'|'user'
-// 下游 route 可透過 context.data.role / context.data.userId 取得身分
+// Middleware：CORS + 解析身分
+//
+// 身分來源優先順序：
+//   1. Cloudflare Access header `Cf-Access-Authenticated-User-Email`
+//      → 自動建立 / 對應 users 表 → 配 role
+//      windcloudemail@gmail.com 為 admin、其他為 user
+//   2. 舊 Authorization Bearer token（local 開發 / 直接打 API 時的 fallback）
+//      Token 格式：v1-admin-token-secure（legacy） 或 {role}-{userId}-{random}
 
-function parseAuth(request) {
+const ADMIN_EMAIL = 'windcloudemail@gmail.com'
+
+function parseLegacyToken(request) {
     const header = request.headers.get('Authorization')
     if (!header?.startsWith('Bearer ')) return { role: null, userId: null }
     const token = header.slice(7)
-    // legacy admin（向下相容，日後可移除）
     if (token === 'v1-admin-token-secure') return { role: 'admin', userId: 1 }
     const m = token.match(/^(admin|user)-(\d+)-[a-z0-9]+$/)
     if (m) return { role: m[1], userId: Number(m[2]) }
     return { role: null, userId: null }
+}
+
+async function getOrCreateAccessUser(env, email) {
+    const lower = email.toLowerCase()
+    let user = await env.DB.prepare(
+        'SELECT id, username, role FROM users WHERE LOWER(username) = ?'
+    ).bind(lower).first()
+
+    if (!user) {
+        const role = lower === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user'
+        const res = await env.DB.prepare(
+            'INSERT INTO users (username, password, role) VALUES (?, ?, ?)'
+        ).bind(lower, '__sso__', role).run()
+        user = { id: res.meta.last_row_id, username: lower, role }
+    }
+    return user
 }
 
 export async function onRequest(context) {
@@ -32,18 +52,34 @@ export async function onRequest(context) {
         const method = context.request.method
         const isMutation = ['POST', 'PUT', 'DELETE'].includes(method)
 
-        const { role, userId } = parseAuth(context.request)
+        let role = null, userId = null, username = null
 
-        // 題庫 / 失敗紀錄的 mutation 只允許 admin
+        // 1. Cloudflare Access SSO header（優先）
+        const accessEmail = context.request.headers.get('Cf-Access-Authenticated-User-Email')
+        if (accessEmail) {
+            try {
+                const user = await getOrCreateAccessUser(context.env, accessEmail)
+                role = user.role
+                userId = user.id
+                username = user.username
+            } catch (e) {
+                console.error('[middleware] SSO user lookup failed:', e?.message)
+            }
+        } else {
+            // 2. 舊 token-based（local 開發 / API 直呼）
+            const parsed = parseLegacyToken(context.request)
+            role = parsed.role
+            userId = parsed.userId
+        }
+
         const requiresAdmin =
             (path.startsWith('/api/questions') && isMutation) ||
             (path.startsWith('/api/import-failures') && isMutation)
 
-        // 個人答題上報需登入（任何 role）
         const requiresUser =
             (path === '/api/attempts' && isMutation) ||
-            (path === '/api/questions/random-wrong') ||  // 錯題複習一定要 per-user
-            (path.startsWith('/api/stats/'))              // 個人統計（精熟度等）一定要 per-user
+            (path === '/api/questions/random-wrong') ||
+            (path.startsWith('/api/stats/'))
 
         if (requiresAdmin && role !== 'admin') {
             return Response.json({ success: false, error: '未經授權的操作，請先以管理員登入' }, { status: 401 })
@@ -52,8 +88,7 @@ export async function onRequest(context) {
             return Response.json({ success: false, error: '請先登入再進行操作' }, { status: 401 })
         }
 
-        // 把解析結果傳給下游 route
-        context.data = { role, userId }
+        context.data = { role, userId, username }
 
         const response = await context.next()
         const newRes = new Response(response.body, response)
