@@ -19,6 +19,25 @@ function parseLegacyToken(request) {
     return { role: null, userId: null }
 }
 
+// Cloudflare Access 把身分放在 cookie CF_Authorization 的 JWT payload 裡（email 欄）
+// 不會自動 inject Cf-Access-Authenticated-User-Email header，所以要自己解 cookie
+function getEmailFromAccessJWT(request) {
+    const cookieHeader = request.headers.get('Cookie') || ''
+    const m = cookieHeader.match(/CF_Authorization=([^;]+)/)
+    if (!m) return null
+    const jwt = m[1]
+    const parts = jwt.split('.')
+    if (parts.length !== 3) return null
+    try {
+        const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const padded = b64 + '='.repeat((4 - b64.length % 4) % 4)
+        const payload = JSON.parse(atob(padded))
+        return payload.email || null
+    } catch {
+        return null
+    }
+}
+
 async function getOrCreateAccessUser(env, email) {
     const lower = email.toLowerCase()
     let user = await env.DB.prepare(
@@ -54,8 +73,11 @@ export async function onRequest(context) {
 
         let role = null, userId = null, username = null
 
-        // 1. Cloudflare Access SSO header（優先）
-        const accessEmail = context.request.headers.get('Cf-Access-Authenticated-User-Email')
+        // 1. Cloudflare Access SSO（優先）
+        //    先試 header（某些 inject 設定有），fallback 解 CF_Authorization cookie 的 JWT
+        const accessEmail =
+            context.request.headers.get('Cf-Access-Authenticated-User-Email') ||
+            getEmailFromAccessJWT(context.request)
         if (accessEmail) {
             try {
                 const user = await getOrCreateAccessUser(context.env, accessEmail)
