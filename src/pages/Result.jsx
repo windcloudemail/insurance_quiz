@@ -1,79 +1,97 @@
+import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { submitAttempts } from '../lib/api.js'
 
 const LABELS = ['A', 'B', 'C', 'D']
 
 export default function Result() {
     const { state } = useLocation()
     const navigate = useNavigate()
+    const reported = useRef(false)
 
     if (!state?.questions) {
         navigate('/')
         return null
     }
 
-    const { questions, answers } = state
+    const { questions, answers, category, practiceOnly } = state
+    const wrongQuestions = questions.filter((q, i) => answers[i]?.selected !== answers[i]?.correct)
+    const hasWrong = wrongQuestions.length > 0
+
+    useEffect(() => {
+        if (practiceOnly) return
+        if (reported.current || !answers || answers.length === 0) return
+        reported.current = true
+        const payload = answers.map(a => ({
+            question_id: a.questionId,
+            correct: a.selected === a.correct,
+        }))
+        submitAttempts(payload).catch(() => { /* 靜默失敗 */ })
+    }, [])
+
     const score = answers.filter(a => a.selected === a.correct).length
     const pct = Math.round((score / questions.length) * 100)
 
-    const gradeColor = pct >= 80 ? '#10b981' : pct >= 60 ? '#facc15' : '#f43f5e'
-    const gradeEmoji = pct >= 80 ? 'trophy' : pct >= 60 ? 'ok' : 'muscle'
-    const gradeMsg = pct >= 80 ? 'top' : pct >= 60 ? 'good' : 'try'
-    const gradeMsgText = pct >= 80 ? 'excellent' : pct >= 60 ? 'almost' : 'keep_trying'
+    const gradeColor = pct >= 80 ? '#5b7f4f' : pct >= 60 ? '#b67a3a' : '#b54545'
+    const gradeMsg = pct >= 80 ? '表現優秀，繼續保持' : pct >= 60 ? '不錯，再加把勁' : '多練習幾次，你可以的'
 
-    const MSGS = { top: '表現優秀！繼續保持', good: '不錯喔，再加把勁！', try: '多練習，你可以的！' }
-    const EMOJIS = { trophy: '🏆', ok: '👍', muscle: '💪' }
-
-    const circumference = 2 * Math.PI * 54
+    const circumference = 2 * Math.PI * 52
 
     return (
-        <div className="fadeIn pb-8">
-            <div className="text-center mb-8 pt-4">
-                <div className="inline-flex items-center justify-center relative mb-5">
-                    <svg width="144" height="144" viewBox="0 0 144 144" style={{ transform: 'rotate(-90deg)' }}>
-                        <circle cx="72" cy="72" r="54" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />
+        <div className="fadeIn pb-28">
+            {practiceOnly && (
+                <div className="mb-4 bg-accent/10 border border-accent/40 rounded-lg px-4 py-2.5 text-center">
+                    <span className="text-accent text-[15px] font-semibold">📝 錯題練習模式 · 本次不計入統計</span>
+                </div>
+            )}
+
+            {/* 分數卡 */}
+            <div className="bg-surface border border-border rounded-xl p-6 mb-6 text-center">
+                <div className="inline-flex items-center justify-center relative mb-3">
+                    <svg width="128" height="128" viewBox="0 0 128 128" style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx="64" cy="64" r="52" fill="none" stroke="#e5e1d6" strokeWidth="6" />
                         <circle
-                            cx="72" cy="72" r="54"
+                            cx="64" cy="64" r="52"
                             fill="none"
                             stroke={gradeColor}
-                            strokeWidth="10"
+                            strokeWidth="6"
                             strokeLinecap="round"
                             strokeDasharray={circumference}
                             strokeDashoffset={circumference * (1 - pct / 100)}
-                            style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)', filter: 'drop-shadow(0 0 8px ' + gradeColor + '88)' }}
+                            style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }}
                         />
                     </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '28px', marginBottom: '2px' }}>{EMOJIS[gradeEmoji]}</span>
-                        <span style={{ fontSize: '36px', fontWeight: 900, color: gradeColor }}>{pct}%</span>
-                        <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{score}/{questions.length} 題</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="font-display text-3xl font-semibold" style={{ color: gradeColor }}>{pct}%</span>
+                        <span className="text-[11px] text-ink-faint font-mono mt-0.5">{score} / {questions.length}</span>
                     </div>
                 </div>
 
-                <h2 className="text-2xl font-black text-white mb-1">測驗完成！</h2>
-                <p className="font-semibold" style={{ color: gradeColor }}>{MSGS[gradeMsg]}</p>
+                <h2 className="font-display text-xl font-semibold text-ink mb-1">測驗完成</h2>
+                <p className="text-sm" style={{ color: gradeColor }}>{gradeMsg}</p>
 
-                <div className="flex justify-center gap-8 mt-5 py-4 border-y border-white/6">
+                <div className="flex justify-center gap-10 mt-5 pt-5 border-t border-border">
                     <div className="text-center">
-                        <div className="text-2xl font-black text-correct">{score}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">答對</div>
+                        <div className="font-mono text-xl font-semibold text-correct">{score}</div>
+                        <div className="text-[11px] text-ink-faint mt-0.5">答對</div>
                     </div>
                     <div className="text-center">
-                        <div className="text-2xl font-black text-wrong">{questions.length - score}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">答錯</div>
+                        <div className="font-mono text-xl font-semibold text-wrong">{questions.length - score}</div>
+                        <div className="text-[11px] text-ink-faint mt-0.5">答錯</div>
                     </div>
                     <div className="text-center">
-                        <div className="text-2xl font-black text-slate-300">{questions.length}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">總題數</div>
+                        <div className="font-mono text-xl font-semibold text-ink-soft">{questions.length}</div>
+                        <div className="text-[11px] text-ink-faint mt-0.5">總題數</div>
                     </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 mb-3">
-                <span className="font-bold text-slate-200 text-sm">逐題回顧</span>
-                <div className="flex-1 h-px bg-white/5" />
+            <div className="flex items-center gap-3 mb-3">
+                <span className="font-serif font-semibold text-ink text-sm">逐題回顧</span>
+                <div className="flex-1 h-px bg-border" />
             </div>
 
-            <div className="flex flex-col gap-2.5 mb-28">
+            <div className="flex flex-col gap-2">
                 {questions.map((q, i) => {
                     const a = answers[i]
                     const ok = a?.selected === a?.correct
@@ -82,23 +100,36 @@ export default function Result() {
                     return (
                         <div
                             key={i}
-                            className={`rounded-2xl p-4 border ${ok ? 'border-correct/20 bg-correct/6' : 'border-wrong/20 bg-wrong/6'}`}
+                            className={`rounded-lg p-3.5 border ${ok ? 'border-correct/30 bg-correct/5' : 'border-wrong/30 bg-wrong/5'}`}
                         >
                             <div className="flex gap-3 items-start">
-                                <div className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black mt-0.5 ${ok ? 'bg-correct text-white' : 'bg-wrong text-white'}`}>
+                                <div className={`shrink-0 w-6 h-6 rounded flex items-center justify-center text-xs font-semibold mt-0.5 ${ok ? 'bg-correct text-surface' : 'bg-wrong text-surface'}`}>
                                     {ok ? '✓' : '✗'}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-slate-200 leading-relaxed line-clamp-2 mb-2">
-                                        Q{i + 1}. {q.question}
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <span className="text-[11px] font-mono text-ink-faint">Q{i + 1}</span>
+                                        {q.source_number != null && (
+                                            <span className="text-[10px] text-ink-soft bg-card px-1.5 py-0.5 rounded font-mono">
+                                                題本 #{q.source_number}
+                                            </span>
+                                        )}
+                                        {q.category && (
+                                            <span className="text-[10px] text-primary bg-primary/8 px-1.5 py-0.5 rounded">
+                                                {q.category}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[14px] text-ink leading-relaxed line-clamp-2 mb-1.5">
+                                        {q.question}
                                     </p>
                                     {!ok && a && (
-                                        <p className="text-xs text-wrong mb-1">
-                                            ✗ 你的答案：{LABELS[a.selected]}. {opts[a.selected]}
+                                        <p className="text-[12px] text-wrong mb-0.5">
+                                            你的答案：{LABELS[a.selected]}. {opts[a.selected]}
                                         </p>
                                     )}
-                                    <p className="text-xs text-correct font-medium">
-                                        ✓ 正確答案：{LABELS[q.answer - 1]}. {opts[q.answer - 1]}
+                                    <p className="text-[12px] text-correct">
+                                        正確答案：{LABELS[q.answer - 1]}. {opts[q.answer - 1]}
                                     </p>
                                 </div>
                             </div>
@@ -107,18 +138,29 @@ export default function Result() {
                 })}
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 px-4 pb-5 pt-4 bg-gradient-to-t from-base via-base/95 to-transparent">
-                <div className="max-w-2xl mx-auto flex gap-3">
+            {/* 底部按鈕 */}
+            <div className="fixed bottom-0 left-0 right-0 px-3 sm:px-4 pb-4 pt-3 bg-gradient-to-t from-base via-base to-transparent">
+                <div className="max-w-2xl mx-auto grid grid-cols-3 gap-1.5 sm:gap-2">
                     <button
                         onClick={() => navigate('/')}
-                        className="flex-1 py-3.5 border border-white/10 text-slate-300 rounded-2xl font-bold hover:border-white/25 hover:text-white transition-all"
+                        className="py-3 px-1 border border-border bg-surface text-ink-soft rounded-md font-medium text-xs sm:text-sm hover:border-border-strong hover:text-ink transition-all"
                     >
                         回首頁
                     </button>
                     <button
-                        onClick={() => navigate('/quiz', { state: { count: questions.length, category: '' } })}
-                        className="flex-1 py-3.5 text-black font-bold rounded-2xl"
-                        style={{ background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)', boxShadow: '0 4px 20px rgba(0,212,255,0.3)' }}
+                        onClick={() => navigate('/quiz', { state: { questions: wrongQuestions, count: wrongQuestions.length, category, practiceOnly: true } })}
+                        disabled={!hasWrong}
+                        className={`py-3 px-1 font-medium text-xs sm:text-sm rounded-md transition-all ${hasWrong
+                            ? 'bg-wrong/10 border border-wrong/40 text-wrong hover:bg-wrong/15'
+                            : 'bg-card border border-border text-ink-faint cursor-not-allowed'
+                            }`}
+                        title={hasWrong ? `只練本次答錯的 ${wrongQuestions.length} 題（不計入統計）` : '本次全對'}
+                    >
+                        {hasWrong ? `練錯題 ${wrongQuestions.length}` : '✓ 全對'}
+                    </button>
+                    <button
+                        onClick={() => navigate('/quiz', { state: { count: questions.length, category } })}
+                        className="py-3 px-1 bg-primary text-surface font-semibold text-xs sm:text-sm rounded-md hover:bg-primary-dim transition-colors"
                     >
                         再練一次
                     </button>

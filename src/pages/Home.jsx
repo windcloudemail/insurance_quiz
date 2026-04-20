@@ -1,73 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCategories } from '../lib/api.js'
+import { getCategories, getRandomQuestions, getRandomWrongQuestions, login, getMasteryStats } from '../lib/api.js'
+
+// 5 段進度配色 — Claude 暖色調
+function progressColor(pct) {
+  if (pct < 20) return '#b54545' // 赤陶紅
+  if (pct < 40) return '#c96442' // 橘
+  if (pct < 60) return '#b67a3a' // 琥珀
+  if (pct < 80) return '#5b7f9a' // 藍灰
+  return '#5b7f4f'               // 橄欖綠
+}
 
 const COUNT_OPTIONS = [10, 20, 30, 40]
-
-// Tech-style logo SVG: circuit-board checkmark / quiz brain
-function TechLogo() {
-  return (
-    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_18px_rgba(0,212,255,0.6)]">
-      {/* Outer hexagon glow ring */}
-      <path
-        d="M36 4L64 20V52L36 68L8 52V20L36 4Z"
-        fill="url(#hexGrad)"
-        opacity="0.15"
-      />
-      <path
-        d="M36 4L64 20V52L36 68L8 52V20L36 4Z"
-        stroke="url(#strokeGrad)"
-        strokeWidth="1.5"
-        fill="none"
-      />
-      {/* Inner hexagon */}
-      <path
-        d="M36 14L56 25V47L36 58L16 47V25L36 14Z"
-        fill="url(#innerGrad)"
-        opacity="0.5"
-      />
-      {/* Circuit dots */}
-      <circle cx="36" cy="14" r="2.5" fill="#00d4ff" opacity="0.9" />
-      <circle cx="56" cy="25" r="2.5" fill="#00d4ff" opacity="0.7" />
-      <circle cx="56" cy="47" r="2.5" fill="#00d4ff" opacity="0.7" />
-      <circle cx="36" cy="58" r="2.5" fill="#00d4ff" opacity="0.9" />
-      <circle cx="16" cy="47" r="2.5" fill="#00d4ff" opacity="0.7" />
-      <circle cx="16" cy="25" r="2.5" fill="#00d4ff" opacity="0.7" />
-      {/* Central checkmark / quiz icon */}
-      <path
-        d="M25 36L32 43L47 28"
-        stroke="url(#checkGrad)"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Small circuit lines */}
-      <line x1="36" y1="14" x2="36" y2="20" stroke="#00d4ff" strokeWidth="1" opacity="0.5" />
-      <line x1="36" y1="52" x2="36" y2="58" stroke="#00d4ff" strokeWidth="1" opacity="0.5" />
-      <line x1="56" y1="25" x2="51" y2="28" stroke="#00d4ff" strokeWidth="1" opacity="0.5" />
-      <line x1="16" y1="25" x2="21" y2="28" stroke="#00d4ff" strokeWidth="1" opacity="0.5" />
-
-      <defs>
-        <linearGradient id="hexGrad" x1="8" y1="4" x2="64" y2="68" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#00d4ff" />
-          <stop offset="1" stopColor="#7c3aed" />
-        </linearGradient>
-        <linearGradient id="strokeGrad" x1="8" y1="4" x2="64" y2="68" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#00d4ff" stopOpacity="0.8" />
-          <stop offset="1" stopColor="#7c3aed" stopOpacity="0.6" />
-        </linearGradient>
-        <linearGradient id="innerGrad" x1="16" y1="14" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#00d4ff" stopOpacity="0.3" />
-          <stop offset="1" stopColor="#0d1a2e" stopOpacity="0.8" />
-        </linearGradient>
-        <linearGradient id="checkGrad" x1="25" y1="36" x2="47" y2="28" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#00d4ff" />
-          <stop offset="1" stopColor="#38bdf8" />
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
 
 export default function Home() {
   const [count, setCount] = useState(20)
@@ -75,13 +19,72 @@ export default function Home() {
   const [category, setCategory] = useState('全部')
   const [categories, setCategories] = useState([])
   const [loadingCats, setLoadingCats] = useState(true)
+  const [mode, setMode] = useState('random')
+  const [wrongCount, setWrongCount] = useState(0)
+  const [excludeMastered, setExcludeMastered] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState('')
+
+  const [authUsername, setAuthUsername] = useState(localStorage.getItem('auth_username') || '')
+  const [authRole, setAuthRole] = useState(localStorage.getItem('auth_role') || '')
+  const [loginUser, setLoginUser] = useState('')
+  const [loginPass, setLoginPass] = useState('')
+  const [loginErr, setLoginErr] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+  const [masteryMap, setMasteryMap] = useState({})
+
   const navigate = useNavigate()
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoginErr('')
+    setLoggingIn(true)
+    try {
+      const res = await login(loginUser.trim(), loginPass.trim())
+      localStorage.setItem('auth_token', res.token)
+      localStorage.setItem('auth_username', res.username)
+      localStorage.setItem('auth_role', res.role)
+      setAuthUsername(res.username)
+      setAuthRole(res.role)
+      setLoginUser('')
+      setLoginPass('')
+    } catch (err) {
+      setLoginErr(err.message || '登入失敗')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_username')
+    localStorage.removeItem('auth_role')
+    setAuthUsername('')
+    setAuthRole('')
+  }
 
   useEffect(() => {
     getCategories()
       .then(data => { setCategories(['全部', ...data]); setLoadingCats(false) })
       .catch(() => { setCategories(['全部']); setLoadingCats(false) })
   }, [])
+
+  useEffect(() => {
+    if (!authUsername) { setMasteryMap({}); return }
+    getMasteryStats()
+      .then(list => {
+        const map = {}
+        let sumTotal = 0, sumMastered = 0
+        for (const row of list) {
+          map[row.category] = { total: row.total, mastered: row.mastered }
+          sumTotal += row.total
+          sumMastered += row.mastered
+        }
+        map['全部'] = { total: sumTotal, mastered: sumMastered }
+        setMasteryMap(map)
+      })
+      .catch(() => setMasteryMap({}))
+  }, [authUsername])
 
   const handleCustomCount = (val) => {
     const n = parseInt(val)
@@ -94,98 +97,279 @@ export default function Home() {
     setCustomCount('')
   }
 
-  const start = () => navigate('/quiz', { state: { count, category } })
+  const cat = category === '全部' ? '' : category
+
+  const start = async () => {
+    setStartError('')
+    if (!authUsername) {
+      setStartError('請先登入再開始練習')
+      return
+    }
+    const newN = Math.max(0, Number(count) || 0)
+    const wrongN = mode === 'mixed' ? Math.max(0, Number(wrongCount) || 0) : 0
+    if (newN + wrongN === 0) {
+      setStartError('題數不能為 0')
+      return
+    }
+    setStarting(true)
+    try {
+      const [newQs, wrongQs] = await Promise.all([
+        newN > 0 ? getRandomQuestions(newN, cat, excludeMastered) : Promise.resolve([]),
+        wrongN > 0 ? getRandomWrongQuestions(wrongN, cat, excludeMastered) : Promise.resolve([]),
+      ])
+      if (wrongN > 0 && wrongQs.length === 0) {
+        setStartError('此分類下沒有錯題可複習')
+        setStarting(false)
+        return
+      }
+      if (newQs.length === 0 && wrongQs.length === 0) {
+        setStartError('沒有符合條件的題目（試試取消「排除精熟」或換分類）')
+        setStarting(false)
+        return
+      }
+      const seen = new Set()
+      const merged = [...newQs, ...wrongQs].filter(q => {
+        if (seen.has(q.id)) return false
+        seen.add(q.id)
+        return true
+      })
+      for (let i = merged.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[merged[i], merged[j]] = [merged[j], merged[i]]
+      }
+      navigate('/quiz', { state: { questions: merged, count: merged.length, category } })
+    } catch (e) {
+      setStartError(e.message || '載入失敗')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const inputCls = 'w-full bg-surface border border-border rounded-md px-3 py-2 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-primary transition-colors'
+  const tabBase = 'py-2.5 rounded-md font-medium text-sm border transition-all'
+  const tabActive = 'border-primary bg-primary/5 text-primary'
+  const tabIdle = 'border-border bg-surface text-ink-soft hover:border-border-strong hover:text-ink'
 
   return (
-    <div className="py-2 fadeIn">
-      {/* 頁首 */}
-      <div className="text-center mb-10">
-        <div className="flex items-center justify-center mb-5 pop-in">
-          <TechLogo />
-        </div>
-        <p className="text-xs tracking-[0.3em] text-primary/60 uppercase font-semibold mb-2">考前衝刺</p>
-        <h1 className="text-4xl font-black text-white leading-tight">外幣保險練習</h1>
-        <p className="text-slate-400 mt-3 text-base">選擇題數與分類，開始隨機練習</p>
+    <div className="fadeIn">
+      {/* 標題 */}
+      <div className="mb-8">
+        <p className="text-xs tracking-widest text-primary/80 uppercase font-semibold mb-2">Exam Practice</p>
+        <h1 className="font-display text-3xl font-semibold text-ink leading-tight">外幣保險練習</h1>
+        <p className="text-ink-soft mt-2 text-[15px] leading-relaxed">選擇題庫與題數，開始隨機練習。</p>
       </div>
 
+      {/* 登入 / 使用者資訊 */}
+      {authUsername ? (
+        <div className="mb-7 bg-surface border border-border rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-ink-soft text-sm">你好，</span>
+            <span className="text-ink font-semibold text-sm font-mono truncate">{authUsername}</span>
+            {authRole === 'admin' && <span className="text-[10px] bg-accent/15 text-accent px-1.5 py-0.5 rounded">管理員</span>}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {authRole === 'admin' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="text-xs px-3 py-1 border border-accent/40 text-accent rounded hover:bg-accent/10"
+              >
+                後台
+              </button>
+            )}
+            <button
+              onClick={handleLogout}
+              className="text-xs px-3 py-1 border border-border text-ink-soft rounded hover:border-border-strong hover:text-ink"
+            >
+              登出
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleLogin} className="mb-7 bg-surface border border-border rounded-lg p-4">
+          <p className="text-ink text-sm mb-3 font-serif font-semibold">登入以開始練習</p>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              value={loginUser}
+              onChange={e => setLoginUser(e.target.value)}
+              placeholder="帳號（生日 MMDD）"
+              maxLength={20}
+              className={inputCls}
+              required
+            />
+            <input
+              type="password"
+              value={loginPass}
+              onChange={e => setLoginPass(e.target.value)}
+              placeholder="密碼（年份 YYYY）"
+              className={inputCls}
+              required
+            />
+          </div>
+          {loginErr && <p className="text-wrong text-xs mb-2">{loginErr}</p>}
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="w-full py-2 bg-primary text-surface font-medium rounded-md hover:bg-primary-dim disabled:opacity-50 text-sm transition-colors"
+          >
+            {loggingIn ? '登入中…' : '登入 / 首次登入自動註冊'}
+          </button>
+          <p className="text-[11px] text-ink-faint mt-2.5 leading-relaxed">
+            帳號為 4 位數生日月日（MMDD，例 1975/4/8 → <span className="font-mono text-ink-soft">0408</span>）、
+            密碼為 4 位數年份（YYYY，例 <span className="font-mono text-ink-soft">1975</span>）。首次登入自動建立。管理員請用 <span className="font-mono text-ink-soft">admin</span>。
+          </p>
+        </form>
+      )}
+
       {/* 題數 */}
-      <div className="mb-7">
-        <p className="text-slate-300 text-sm mb-3 font-semibold flex items-center gap-2">
-          <span className="text-primary">◈</span> 選擇題數
-        </p>
-        <div className="grid grid-cols-4 gap-2 mb-3">
+      <section className="mb-7">
+        <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">
+          {mode === 'mixed' ? '新題數' : '題數'}
+        </h2>
+        <div className="grid grid-cols-4 gap-2 mb-2.5">
           {COUNT_OPTIONS.map(n => (
             <button
               key={n}
               onClick={() => handlePresetCount(n)}
-              className={`py-3.5 rounded-2xl font-bold text-base border transition-all duration-200 active:scale-95 ${count === n && !customCount
-                  ? 'border-primary/60 bg-primary/10 text-primary shadow-[0_0_16px_rgba(0,212,255,0.25)]'
-                  : 'border-white/8 bg-surface text-slate-300 hover:border-primary/30 hover:bg-primary/5'
-                }`}
+              className={`${tabBase} ${count === n && !customCount ? tabActive : tabIdle}`}
             >
-              {n}題
+              {n} 題
             </button>
           ))}
         </div>
-        {/* 自訂題數 */}
-        <div className="flex items-center gap-3 bg-surface border border-white/8 rounded-2xl px-4 py-3">
-          <span className="text-primary text-xs shrink-0 font-mono">自訂</span>
+        <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-2">
+          <span className="text-ink-faint text-xs font-mono shrink-0">自訂</span>
           <input
             type="number"
             min="1" max="999"
-            placeholder="輸入任意題數…"
+            placeholder="任意題數"
             value={customCount}
             onChange={e => handleCustomCount(e.target.value)}
-            className={`flex-1 bg-transparent text-sm font-bold text-white focus:outline-none placeholder-slate-700 transition-all ${customCount ? 'text-primary' : ''}`}
+            className="flex-1 bg-transparent text-sm text-ink focus:outline-none placeholder-ink-faint"
           />
-          {customCount && <span className="text-primary text-sm font-bold shrink-0 font-mono">{count}題</span>}
+          {customCount && <span className="text-primary text-xs font-mono">{count} 題</span>}
         </div>
-      </div>
+      </section>
 
-      {/* 分類 */}
-      <div className="mb-8">
-        <p className="text-slate-300 text-sm mb-3 font-semibold flex items-center gap-2">
-          <span className="text-primary">◈</span> 選擇題本
-        </p>
+      {/* 題本 */}
+      <section className="mb-7">
+        <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">題本</h2>
         {loadingCats ? (
           <div className="flex flex-col gap-2">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-12 bg-surface/70 rounded-2xl animate-pulse border border-white/5" />
+              <div key={i} className="h-10 bg-card rounded-md animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {categories.map(c => (
-              <button
-                key={c}
-                onClick={() => setCategory(c)}
-                className={`w-full text-left px-5 py-3.5 rounded-2xl border transition-all duration-200 text-sm font-medium flex items-center gap-3 active:scale-[0.99] ${category === c
-                    ? 'border-primary/50 bg-primary/10 text-white shadow-[0_0_20px_rgba(0,212,255,0.15)]'
-                    : 'border-white/6 bg-surface text-slate-400 hover:border-primary/25 hover:bg-primary/5 hover:text-slate-200'
-                  }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${category === c ? 'bg-primary shadow-[0_0_6px_rgba(0,212,255,0.8)]' : 'bg-slate-700'}`} />
-                <span className="flex-1">{c === '全部' ? '全部分類' : c}</span>
-                {category === c && <span className="text-primary text-sm">✓</span>}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1.5">
+            {categories.map(c => {
+              const m = masteryMap[c]
+              const total = m?.total || 0
+              const mastered = m?.mastered || 0
+              const remaining = total - mastered
+              const pct = total > 0 ? (mastered / total) * 100 : 0
+              const color = progressColor(pct)
+              const selected = category === c
+              return (
+                <button
+                  key={c}
+                  onClick={() => setCategory(c)}
+                  className={`w-full text-left px-4 py-3 rounded-md border transition-all ${selected
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border bg-surface hover:border-border-strong'
+                    }`}
+                >
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? 'bg-primary' : 'bg-border-strong'}`} />
+                    <span className="flex-1 text-[15px] font-medium text-ink truncate">{c === '全部' ? '全部分類' : c}</span>
+                    {selected && <span className="text-primary text-sm">✓</span>}
+                  </div>
+                  {authUsername && total > 0 && (
+                    <div className="pl-4">
+                      <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, background: color }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1.5 text-[12px] font-mono">
+                        <span className="text-ink-soft">
+                          精熟 <span className="font-semibold" style={{ color }}>{mastered}</span> / {total}（剩 {remaining}）
+                        </span>
+                        <span style={{ color }} className="font-semibold">{pct.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* 開始按鈕 */}
+      {/* 組題模式 */}
+      <section className="mb-6">
+        <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">組題模式</h2>
+        <div className="grid grid-cols-2 gap-2 mb-2.5">
+          <button
+            onClick={() => setMode('random')}
+            className={`${tabBase} ${mode === 'random' ? tabActive : tabIdle}`}
+          >
+            全部隨機
+          </button>
+          <button
+            onClick={() => { setMode('mixed'); if (wrongCount === 0) setWrongCount(5) }}
+            className={`${tabBase} ${mode === 'mixed' ? tabActive : tabIdle}`}
+          >
+            混合錯題複習
+          </button>
+        </div>
+        {mode === 'mixed' && (
+          <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-2">
+            <span className="text-ink-faint text-xs font-mono shrink-0">+ 錯題</span>
+            <input
+              type="number"
+              min="0" max="100"
+              value={wrongCount}
+              onChange={e => setWrongCount(Math.max(0, Number(e.target.value) || 0))}
+              className="flex-1 bg-transparent text-sm text-ink focus:outline-none"
+            />
+            <span className="text-ink-faint text-xs font-mono shrink-0">題</span>
+            <span className="text-primary text-xs font-semibold font-mono shrink-0 border-l border-border pl-2.5">
+              共 {Number(count) + Number(wrongCount)} 題
+            </span>
+          </div>
+        )}
+      </section>
+
+      {/* 精熟排除 */}
+      <label className="mb-6 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">
+        <input
+          type="checkbox"
+          checked={excludeMastered}
+          onChange={e => setExcludeMastered(e.target.checked)}
+          className="mt-0.5 w-4 h-4 accent-primary cursor-pointer"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-ink font-medium">排除已精熟的題目</p>
+          <p className="text-[11px] text-ink-faint mt-0.5">累積答對 3 次以上的題目暫時不出現，節省時間</p>
+        </div>
+      </label>
+
+      {startError && (
+        <p className="text-wrong text-xs mb-3 text-center">{startError}</p>
+      )}
       <button
         onClick={start}
-        className="w-full py-4 text-base font-black rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-black"
-        style={{
-          background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)',
-          boxShadow: '0 4px 24px rgba(0,212,255,0.35)'
-        }}
+        disabled={starting}
+        className="w-full py-3.5 bg-primary text-surface font-semibold rounded-md hover:bg-primary-dim disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
       >
-        開始練習
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M5 12h14M12 5l7 7-7 7" />
-        </svg>
+        {starting ? '載入中…' : '開始練習'}
+        {!starting && (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        )}
       </button>
     </div>
   )

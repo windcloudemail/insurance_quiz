@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, loginAdmin, reorderQuestions } from '../lib/api.js'
+import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, login, reorderQuestions, bulkCreateQuestions, getImportFailures, bulkCreateFailures, deleteImportFailure } from '../lib/api.js'
 import { parseDocument } from '../lib/fileParser.js'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -15,20 +15,27 @@ function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handl
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-surface border border-slate-700 rounded-xl p-4 flex gap-3 relative z-10">
+    <div ref={setNodeRef} style={style} className="bg-surface border border-border rounded-xl p-4 flex gap-3 relative z-10">
       <div
         {...attributes}
         {...listeners}
-        className="pt-1.5 shrink-0 cursor-grab active:cursor-grabbing text-slate-500 hover:text-white"
+        className="shrink-0 self-stretch min-w-[32px] flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing text-ink-soft hover:text-ink hover:bg-card border border-transparent hover:border-border transition-colors touch-none"
         title="拖曳排序"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
+          <circle cx="4" cy="4" r="1.6" />
+          <circle cx="10" cy="4" r="1.6" />
+          <circle cx="4" cy="10" r="1.6" />
+          <circle cx="10" cy="10" r="1.6" />
+          <circle cx="4" cy="16" r="1.6" />
+          <circle cx="10" cy="16" r="1.6" />
+        </svg>
       </div>
 
       <div className="pt-1.5 shrink-0">
         <input
           type="checkbox"
-          className="w-4 h-4 rounded border-slate-600 bg-base text-accent cursor-pointer"
+          className="w-4 h-4 rounded border-border bg-base accent-primary cursor-pointer"
           checked={selectedIds.has(q.id)}
           onChange={() => toggleSelect(q.id)}
         />
@@ -36,24 +43,36 @@ function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handl
       <div className="flex items-start justify-between gap-3 w-full">
         <div className="flex-1 min-w-0">
           <div className="flex gap-2 mb-1 flex-wrap items-center">
-            <span className="text-xs font-bold bg-accent text-black px-2 py-0.5 rounded-md">Q{displayIndex}</span>
-            <span className="text-xs bg-primary text-blue-200 px-2 py-0.5 rounded-md">{q.category}</span>
+            <span className="text-xs font-bold bg-primary text-surface px-2 py-0.5 rounded-md">Q{displayIndex}</span>
+            {q.source_number != null && (
+              <span className="text-xs font-bold bg-correct text-surface px-2 py-0.5 rounded-md" title="題本原始題號">
+                題本 #{q.source_number}
+              </span>
+            )}
+            <span className="text-xs bg-primary text-primary px-2 py-0.5 rounded-md">{q.category}</span>
+            {((q.correct_count || 0) + (q.wrong_count || 0) > 0) && (
+              <span className="text-xs font-mono bg-card text-ink px-2 py-0.5 rounded-md" title="累計答對 / 答錯次數">
+                <span className="text-correct">✓{q.correct_count || 0}</span>
+                <span className="mx-1 text-ink-faint">/</span>
+                <span className="text-wrong">✗{q.wrong_count || 0}</span>
+              </span>
+            )}
           </div>
-          <p className="text-sm text-slate-200 leading-relaxed line-clamp-2">{q.question}</p>
+          <p className="text-sm text-ink leading-relaxed line-clamp-2">{q.question}</p>
           {q.question_part2 && (
-            <p className="text-sm text-slate-400 leading-relaxed line-clamp-1 mt-1 border-t border-slate-700/50 pt-1">
+            <p className="text-sm text-ink-soft leading-relaxed line-clamp-1 mt-1 border-t border-border/50 pt-1">
               {q.question_part2}
             </p>
           )}
-          <p className="text-xs text-green-400 mt-1">答案：選項 {q.answer}</p>
+          <p className="text-xs text-correct mt-1">答案：選項 {q.answer}</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => handleEdit(q)}
-            className="px-3 py-1.5 text-xs border border-slate-600 text-slate-300 rounded-lg hover:border-accent hover:text-accent transition-all z-20">
+            className="px-3 py-1.5 text-xs border border-border text-ink rounded-lg hover:border-primary hover:text-primary transition-all z-20">
             編輯
           </button>
           <button onClick={() => handleDelete(q.id)}
-            className="px-3 py-1.5 text-xs border border-red-800 text-red-400 rounded-lg hover:bg-red-950 transition-all z-20">
+            className="px-3 py-1.5 text-xs border border-wrong/40 text-wrong rounded-lg hover:bg-wrong/15 transition-all z-20">
             刪除
           </button>
         </div>
@@ -63,6 +82,7 @@ function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handl
 }
 
 const EMPTY_FORM = {
+  source_number: '',
   category: '外幣保險',
   difficulty: 'medium',
   question: '',
@@ -83,23 +103,33 @@ export default function Admin() {
   const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
-  const [token, setToken] = useState(localStorage.getItem('admin_token') || '')
+  const [token, setToken] = useState(
+    localStorage.getItem('auth_role') === 'admin' ? (localStorage.getItem('auth_token') || '') : ''
+  )
+  const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [failures, setFailures] = useState([])
+  const [failuresExpanded, setFailuresExpanded] = useState(true)
+  const [resolvingFailureId, setResolvingFailureId] = useState(null)
 
   const handleLogin = async (e) => {
     e.preventDefault()
     setLoggingIn(true)
     setError('')
     try {
-      const res = await loginAdmin(password)
-      if (res.token) {
-        localStorage.setItem('admin_token', res.token)
-        setToken(res.token)
-        setPassword('')
+      const res = await login(username, password)
+      if (res.role !== 'admin') {
+        setError('此帳號不是管理員，無法進入後台')
+        return
       }
+      localStorage.setItem('auth_token', res.token)
+      localStorage.setItem('auth_username', res.username)
+      localStorage.setItem('auth_role', res.role)
+      setToken(res.token)
+      setPassword('')
     } catch (err) {
       setError(err.message || '登入失敗')
     } finally {
@@ -108,7 +138,9 @@ export default function Admin() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('admin_token')
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_username')
+    localStorage.removeItem('auth_role')
     setToken('')
     setQuestions([])
   }
@@ -125,12 +157,20 @@ export default function Admin() {
       })
   }
 
-  useEffect(() => { load() }, [token])
+  const loadFailures = () => {
+    if (!token) return
+    getImportFailures()
+      .then(setFailures)
+      .catch(() => { /* ignore */ })
+  }
+
+  useEffect(() => { load(); loadFailures() }, [token])
 
   const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 2500) }
 
   const handleEdit = (q) => {
     setForm({
+      source_number: q.source_number ?? '',
       category: q.category, difficulty: q.difficulty,
       question: q.question, question_part2: q.question_part2 || '',
       option_1: q.option_1, option_2: q.option_2,
@@ -237,8 +277,87 @@ export default function Admin() {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    await processFile(file);
-    e.target.value = '' // reset
+
+    // JSON：直接走 bulk 批次匯入（最精準、最快）
+    if (file.name.endsWith('.json') || file.type === 'application/json') {
+      await processJsonFile(file)
+    } else {
+      await processFile(file)
+    }
+    e.target.value = ''
+  }
+
+  const processJsonFile = async (file) => {
+    setUploading(true)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+
+      // 支援兩種格式：陣列（舊）/ {questions, failures} 物件（新）
+      const questionList = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null)
+      const failureList = Array.isArray(data?.failures) ? data.failures : []
+
+      if (!questionList || (questionList.length === 0 && failureList.length === 0)) {
+        flash('JSON 格式錯誤或為空')
+        return
+      }
+
+      const catCount = {}
+      for (const q of questionList) {
+        const k = q.category || '未分類'
+        catCount[k] = (catCount[k] || 0) + 1
+      }
+      const catStr = Object.entries(catCount).map(([k, v]) => `${k} ${v} 題`).join('、')
+
+      const summary = `題目 ${questionList.length} 題（${catStr || '無'}）` +
+        (failureList.length > 0 ? `\n失敗紀錄 ${failureList.length} 筆（供後台手動補建）` : '')
+      if (!confirm(`${summary}\n\n確定要匯入嗎？`)) return
+
+      flash(`批次匯入 ${questionList.length} 題中…`)
+      let msg = ''
+      if (questionList.length > 0) {
+        const res = await bulkCreateQuestions(questionList)
+        msg = `✅ 題目 ${res.inserted}/${res.total}`
+      }
+      if (failureList.length > 0) {
+        const fres = await bulkCreateFailures(failureList)
+        msg += ` / 失敗紀錄 ${fres.inserted}/${fres.total}`
+      }
+      flash(msg || '完成')
+      load()
+      loadFailures()
+    } catch (err) {
+      flash(`❌ 匯入失敗：${err.message}`)
+      if (err.message.includes('登入')) handleLogout()
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // 點「去新增」：把 failure 內容預填到新增表單，記下 failure id，
+  // 使用者 submit 成功後自動刪除這筆失敗紀錄
+  const handleResolveFailure = (f) => {
+    setForm({
+      ...EMPTY_FORM,
+      source_number: f.source_number ?? '',
+      category: f.category || selectedCategory || '外幣保險',
+      question: f.raw_body || '',
+    })
+    setEditId(null)
+    setResolvingFailureId(f.id)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleDismissFailure = async (id) => {
+    if (!confirm('確定這筆失敗紀錄已處理完畢，可以移除？')) return
+    try {
+      await deleteImportFailure(id)
+      flash('✅ 已移除失敗紀錄')
+      loadFailures()
+    } catch (err) {
+      flash(`❌ 移除失敗：${err.message}`)
+    }
   }
 
   const processFile = async (file) => {
@@ -362,6 +481,14 @@ export default function Admin() {
         flash('已更新')
       } else {
         await createQuestion(form)
+        // 若是從「去新增失敗紀錄」進來，同步刪除該筆 failure
+        if (resolvingFailureId) {
+          try {
+            await deleteImportFailure(resolvingFailureId)
+          } catch { /* 失敗忽略 */ }
+          setResolvingFailureId(null)
+          loadFailures()
+        }
         flash('已新增')
       }
       setShowForm(false)
@@ -419,14 +546,25 @@ export default function Admin() {
     }
   };
 
-  const inputClass = "w-full bg-base border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-accent"
-  const labelClass = "block text-xs text-slate-400 mb-1 font-medium"
+  const inputClass = "w-full bg-base border border-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary"
+  const labelClass = "block text-xs text-ink-soft mb-1 font-medium"
 
   if (!token) {
     return (
-      <div className="max-w-md mx-auto mt-12 bg-surface border border-slate-600 rounded-2xl p-6">
-        <h1 className="text-xl font-black text-white mb-6 text-center">管理員登入</h1>
+      <div className="max-w-md mx-auto mt-12 bg-surface border border-border rounded-2xl p-6">
+        <h1 className="font-serif text-xl font-semibold text-ink mb-6 text-center">管理員登入</h1>
         <form onSubmit={handleLogin}>
+          <div className="mb-3">
+            <label className={labelClass}>帳號</label>
+            <input
+              type="text"
+              className={inputClass}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="admin"
+              required
+            />
+          </div>
           <div className="mb-4">
             <label className={labelClass}>密碼</label>
             <input
@@ -438,14 +576,18 @@ export default function Admin() {
               required
             />
           </div>
-          {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+          {error && <p className="text-wrong text-sm mb-4 text-center">{error}</p>}
           <button
             type="submit"
             disabled={loggingIn}
-            className="w-full py-3 bg-accent text-black font-bold rounded-xl hover:bg-yellow-400 disabled:opacity-50 transition-all"
+            className="w-full py-3 bg-primary text-surface font-bold rounded-xl hover:bg-primary-dim disabled:opacity-50 transition-all"
           >
             {loggingIn ? '登入中...' : '登入'}
           </button>
+          <p className="text-xs text-ink-faint mt-4 text-center leading-relaxed">
+            管理員帳號：<span className="text-ink font-mono">admin</span><br />
+            一般練習請回首頁以生日登入
+          </p>
         </form>
       </div>
     )
@@ -453,14 +595,14 @@ export default function Admin() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-black text-white">題庫管理</h1>
-        <div className="flex gap-2">
-          <label className={`px-4 py-2 cursor-pointer font-bold text-sm rounded-lg transition-all ${uploading ? 'bg-slate-600 text-slate-400' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
-            {uploading ? '解析中...' : '📂 上傳題庫 (PDF/DOCX/圖片)'}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-serif text-xl font-semibold text-ink">題庫管理</h1>
+        <div className="flex flex-wrap gap-2">
+          <label className={`px-4 py-2 cursor-pointer font-bold text-sm rounded-lg transition-all ${uploading ? 'bg-card text-ink-soft' : 'bg-card text-ink hover:border-border-strong border border-border'}`}>
+            {uploading ? '處理中...' : '📂 上傳題庫'}
             <input
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+              accept=".pdf,.docx,.json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json,image/*"
               className="hidden"
               onChange={handleFileUpload}
               disabled={uploading}
@@ -468,23 +610,74 @@ export default function Admin() {
           </label>
           <button
             onClick={handleNew}
-            className="px-4 py-2 bg-accent text-black font-bold text-sm rounded-lg hover:bg-yellow-400 transition-all"
+            className="px-4 py-2 bg-primary text-surface font-bold text-sm rounded-lg hover:bg-primary-dim transition-all"
           >
-            ＋ 新增題目
+            ＋ 手動新增
           </button>
-          <button onClick={handleLogout} className="px-3 py-2 border border-slate-600 text-slate-300 rounded-lg text-sm hover:border-slate-400">
+          <button onClick={handleLogout} className="px-3 py-2 border border-border text-ink rounded-lg text-sm hover:border-border-strong">
             登出
           </button>
         </div>
       </div>
 
+      {/* 匯入失敗紀錄：parser 抓不到的題目，手動補齊後按「已處理」移除 */}
+      {failures.length > 0 && (
+        <div className="fadeIn mb-6 bg-accent/8 border border-accent/35 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setFailuresExpanded(!failuresExpanded)}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/12 transition-all"
+          >
+            <span className="text-accent font-bold text-sm">
+              ⚠️ 匯入失敗紀錄 {failures.length} 筆
+            </span>
+            <span className="text-accent text-xs">{failuresExpanded ? '收合 ▲' : '展開 ▼'}</span>
+          </button>
+          {failuresExpanded && (
+            <div className="border-t border-accent/25 p-4 space-y-3 max-h-[500px] overflow-y-auto">
+              {failures.map(f => (
+                <div key={f.id} className="bg-accent/6 border border-accent/35 rounded-lg p-3">
+                  <div className="flex gap-2 mb-2 flex-wrap items-center">
+                    {f.source_number != null && (
+                      <span className="text-xs font-bold bg-primary text-surface px-2 py-0.5 rounded-md">
+                        題本 #{f.source_number}
+                      </span>
+                    )}
+                    <span className="text-xs text-accent bg-accent/12 px-2 py-0.5 rounded-md border border-accent/35">
+                      {f.category || '無分類'}
+                    </span>
+                    <span className="text-xs text-accent italic">{f.reason}</span>
+                  </div>
+                  <p className="text-xs text-ink leading-relaxed whitespace-pre-wrap bg-card p-2 rounded mb-2 max-h-24 overflow-y-auto">
+                    {f.raw_body || '(空)'}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleResolveFailure(f)}
+                      className="px-3 py-1 text-xs font-bold bg-correct text-surface rounded-md hover:bg-correct/80 transition-all"
+                    >
+                      👉 去新增題目（預填）
+                    </button>
+                    <button
+                      onClick={() => handleDismissFailure(f.id)}
+                      className="px-3 py-1 text-xs font-bold bg-card text-ink rounded-md hover:bg-card transition-all"
+                    >
+                      ✓ 已處理（移除紀錄）
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 工具列：分類過濾與批次操作 */}
       {!loading && !error && questions.length > 0 && (
-        <div className="fadeIn flex flex-wrap items-center justify-between mb-6 gap-4 bg-surface border border-slate-700 p-4 rounded-xl">
+        <div className="fadeIn flex flex-wrap items-center justify-between mb-6 gap-4 bg-surface border border-border p-4 rounded-xl">
           <div className="flex items-center gap-3">
-            <label className="text-sm font-bold text-slate-300">選擇題本：</label>
+            <label className="text-sm font-bold text-ink">選擇題本：</label>
             <select
-              className="bg-base border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-accent"
+              className="bg-base border border-border rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary"
               value={selectedCategory}
               onChange={e => { setSelectedCategory(e.target.value); setSelectedIds(new Set()) }}
             >
@@ -495,10 +688,10 @@ export default function Admin() {
             </select>
           </div>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer user-select-none">
+            <label className="flex items-center gap-2 text-sm text-ink cursor-pointer user-select-none">
               <input
                 type="checkbox"
-                className="w-4 h-4 rounded border-slate-600 bg-base text-accent"
+                className="w-4 h-4 rounded border-border bg-base text-accent"
                 checked={filteredQuestions.length > 0 && selectedIds.size === filteredQuestions.length}
                 onChange={toggleSelectAll}
                 disabled={filteredQuestions.length === 0}
@@ -508,7 +701,7 @@ export default function Admin() {
             <button
               onClick={handleBulkDelete}
               disabled={selectedIds.size === 0}
-              className="px-4 py-2 text-sm font-bold bg-red-900/50 text-red-400 border border-red-800 rounded-lg hover:bg-red-800 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-bold bg-wrong/10 text-wrong border border-wrong/40 rounded-lg hover:bg-wrong hover:text-ink transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               批次刪除 ({selectedIds.size})
             </button>
@@ -518,17 +711,28 @@ export default function Admin() {
 
       {/* 訊息提示 */}
       {msg && (
-        <div className="fadeIn mb-4 px-4 py-3 bg-green-900 border border-green-600 text-green-300 text-sm rounded-xl">
+        <div className="fadeIn mb-4 px-4 py-3 bg-correct/10 border border-correct/40 text-correct text-sm rounded-xl">
           {msg}
         </div>
       )}
 
       {/* 新增 / 編輯表單 */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-surface border border-slate-600 rounded-2xl p-5 mb-6 fadeIn">
-          <h2 className="font-bold text-white mb-4">{editId ? '編輯題目' : '新增題目'}</h2>
+        <form onSubmit={handleSubmit} className="bg-surface border border-border rounded-2xl p-5 mb-6 fadeIn">
+          <h2 className="font-serif font-semibold text-ink mb-4">{editId ? '編輯題目' : '新增題目'}</h2>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className={labelClass}>題本原題號</label>
+              <input
+                type="number"
+                min="1"
+                className={inputClass}
+                value={form.source_number}
+                placeholder="選填"
+                onChange={e => setForm(f => ({ ...f, source_number: e.target.value }))}
+              />
+            </div>
             <div>
               <label className={labelClass}>分類</label>
               <input className={inputClass} value={form.category}
@@ -612,11 +816,11 @@ export default function Admin() {
 
           <div className="flex gap-2">
             <button type="submit" disabled={saving}
-              className="flex-1 py-3 bg-accent text-black font-bold rounded-xl hover:bg-yellow-400 disabled:opacity-50 transition-all">
+              className="flex-1 py-3 bg-primary text-surface font-bold rounded-xl hover:bg-primary-dim disabled:opacity-50 transition-all">
               {saving ? '儲存中…' : editId ? '更新題目' : '新增題目'}
             </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="px-5 py-3 border border-slate-600 text-slate-300 rounded-xl hover:border-slate-400 transition-all">
+            <button type="button" onClick={() => { setShowForm(false); setResolvingFailureId(null) }}
+              className="px-5 py-3 border border-border text-ink rounded-xl hover:border-border-strong transition-all">
               取消
             </button>
           </div>
@@ -625,9 +829,9 @@ export default function Admin() {
 
       {/* 題目列表 */}
       {loading ? (
-        <p className="text-slate-400 text-center py-8">載入中…</p>
+        <p className="text-ink-soft text-center py-8">載入中…</p>
       ) : error ? (
-        <p className="text-red-400 text-center py-8">{error}</p>
+        <p className="text-wrong text-center py-8">{error}</p>
       ) : (
         <div className="flex flex-col gap-3">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -647,7 +851,7 @@ export default function Admin() {
           </DndContext>
 
           {filteredQuestions.length === 0 && (
-            <p className="text-slate-500 text-center py-8">
+            <p className="text-ink-faint text-center py-8">
               {questions.length === 0 ? '尚無題目，請先新增' : '此分類下沒有題目'}
             </p>
           )}

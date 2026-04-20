@@ -3,3 +3,11 @@ dist/
 .dev.vars
 .wrangler/
 *.local
+
+# debug / test 殘留
+_parse_*.txt
+_test_*.py
+_test_*.json
+_diag_*.py
+_diag_*.txt
+_ctx_*.txt

@@ -14,14 +14,18 @@ export async function onRequestGet({ params, env }) {
 export async function onRequestPut({ params, request, env }) {
   const { id } = params
   const body = await request.json()
-  const { category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation } = body
+  const { source_number, category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation } = body
+
+  const srcNum = source_number === '' || source_number === undefined || source_number === null
+    ? null
+    : Number(source_number)
 
   await env.DB.prepare(
     `UPDATE questions
-     SET category=?, difficulty=?, question=?, question_part2=?, option_1=?, option_2=?, option_3=?, option_4=?, answer=?, explanation=?
+     SET source_number=?, category=?, difficulty=?, question=?, question_part2=?, option_1=?, option_2=?, option_3=?, option_4=?, answer=?, explanation=?
      WHERE id=?`
   ).bind(
-    category, difficulty, question, question_part2 || '',
+    srcNum, category, difficulty, question, question_part2 || '',
     option_1, option_2, option_3, option_4,
     Number(answer), explanation || '',
     id

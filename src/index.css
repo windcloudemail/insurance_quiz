@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400&family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@400;500;700;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,49 +6,48 @@
 
 @layer base {
   body {
-    @apply bg-base text-slate-100 font-sans;
-    background-image: radial-gradient(ellipse at 80% 0%, rgba(0, 212, 255, 0.12) 0%, transparent 55%),
-      radial-gradient(ellipse at 10% 90%, rgba(124, 58, 237, 0.09) 0%, transparent 50%);
+    @apply bg-base text-ink font-sans;
     min-height: 100vh;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #070b14;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #1e2d40;
+    background: #d1cbbc;
     border-radius: 99px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #b8b19d;
   }
 }
 
 @layer utilities {
   .fadeIn {
-    animation: fadeIn 0.3s ease forwards;
+    animation: fadeIn 0.25s ease forwards;
   }
 
   .slide-up {
-    animation: slideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
-  .card-hover {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(66, 85, 255, 0.20);
+  .font-display {
+    font-family: 'Source Serif 4', 'Noto Serif TC', Georgia, serif;
   }
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
 
   to {
@@ -60,7 +59,7 @@
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
 
   to {
@@ -71,14 +70,12 @@
 
 @keyframes popIn {
   0% {
-    transform: scale(0.85);
+    transform: scale(0.9);
     opacity: 0;
   }
-
   70% {
-    transform: scale(1.04);
+    transform: scale(1.03);
   }
-
   100% {
     transform: scale(1);
     opacity: 1;
@@ -86,5 +83,5 @@
 }
 
 .pop-in {
-  animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }

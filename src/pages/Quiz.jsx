@@ -10,33 +10,34 @@ export default function Quiz() {
     const navigate = useNavigate()
     const count = state?.count ?? 20
     const category = state?.category ?? ''
+    const practiceOnly = state?.practiceOnly ?? false
 
-    const [questions, setQuestions] = useState([])
+    const [questions, setQuestions] = useState(state?.questions ?? [])
     const [current, setCurrent] = useState(0)
     const [selected, setSelected] = useState(null)
     const [revealed, setRevealed] = useState(false)
     const [answers, setAnswers] = useState([])
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(!state?.questions)
     const [error, setError] = useState('')
 
     useEffect(() => {
+        if (state?.questions && state.questions.length > 0) return
         getRandomQuestions(count, category === '全部' ? '' : category)
             .then(data => { setQuestions(data); setLoading(false) })
             .catch(e => { setError(e.message); setLoading(false) })
     }, [])
 
     if (loading) return (
-        <div className="flex flex-col items-center justify-center h-72 gap-4">
-            <div className="w-14 h-14 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm">載入題目中…</p>
+        <div className="flex flex-col items-center justify-center h-72 gap-3">
+            <div className="w-10 h-10 border-2 border-border border-t-primary rounded-full animate-spin" />
+            <p className="text-ink-soft text-sm">載入題目中…</p>
         </div>
     )
 
     if (error) return (
         <div className="text-center py-16 fadeIn">
-            <div className="text-5xl mb-4">⚠️</div>
-            <p className="text-slate-300 mb-6">{error}</p>
-            <button onClick={() => navigate('/')} className="px-6 py-2.5 text-black font-bold rounded-xl" style={{ background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)' }}>
+            <p className="text-ink-soft mb-6">{error}</p>
+            <button onClick={() => navigate('/')} className="px-5 py-2 bg-primary text-surface rounded-md font-medium hover:bg-primary-dim">
                 返回首頁
             </button>
         </div>
@@ -44,9 +45,8 @@ export default function Quiz() {
 
     if (questions.length === 0) return (
         <div className="text-center py-16 fadeIn">
-            <div className="text-5xl mb-4">📭</div>
-            <p className="text-slate-300 mb-6">此分類尚無題目</p>
-            <button onClick={() => navigate('/')} className="px-6 py-2.5 text-black font-bold rounded-xl" style={{ background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)' }}>
+            <p className="text-ink-soft mb-6">此分類尚無題目</p>
+            <button onClick={() => navigate('/')} className="px-5 py-2 bg-primary text-surface rounded-md font-medium hover:bg-primary-dim">
                 返回首頁
             </button>
         </div>
@@ -74,7 +74,7 @@ export default function Quiz() {
             setSelected(null)
             setRevealed(false)
         } else {
-            navigate('/result', { state: { questions, answers: [...answers] } })
+            navigate('/result', { state: { questions, answers: [...answers], category, practiceOnly } })
         }
     }
 
@@ -90,33 +90,38 @@ export default function Quiz() {
 
     return (
         <div className="fadeIn">
-            {/* Progress bar */}
+            {/* 進度列 */}
             <div className="flex items-center gap-3 mb-5">
                 <button
                     onClick={() => navigate('/')}
-                    className="shrink-0 w-9 h-9 rounded-xl bg-surface border border-white/8 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center justify-center text-sm"
+                    className="shrink-0 w-8 h-8 rounded-md border border-border text-ink-soft hover:border-border-strong hover:text-ink transition-all flex items-center justify-center text-sm"
                 >
                     ✕
                 </button>
-                <div className="flex-1 h-2 bg-surface rounded-full overflow-hidden border border-white/5">
+                <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
-                        className="h-full rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #00d4ff, #7c3aed)' }}
+                        className="h-full bg-primary rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%` }}
                     />
                 </div>
-                <span className="shrink-0 text-slate-400 text-xs font-semibold tabular-nums">{current}/{questions.length}</span>
+                <span className="shrink-0 text-ink-soft text-xs font-mono tabular-nums">{current}/{questions.length}</span>
             </div>
 
-            {/* Question */}
+            {practiceOnly && (
+                <div className="mb-4 bg-accent/10 border border-accent/40 rounded-lg px-4 py-2.5 text-center">
+                    <span className="text-accent text-[15px] font-semibold">📝 錯題練習模式 · 本次不計入統計</span>
+                </div>
+            )}
+
             <QuestionCard
                 current={current + 1}
                 total={questions.length}
+                source_number={q.source_number}
                 question={q.question}
                 question_part2={q.question_part2}
             />
 
-            {/* Options */}
-            <div className="flex flex-col gap-2.5 mb-4">
+            <div className="flex flex-col gap-2 mb-4">
                 {opts.map((opt, idx) => (
                     <OptionButton
                         key={idx}
@@ -128,54 +133,50 @@ export default function Quiz() {
                 ))}
             </div>
 
-            {/* Explanation */}
             {revealed && <ExplanationBox isCorrect={isCorrect} explanation={q.explanation} />}
 
-            {/* CTA */}
             <div className="mt-5">
                 {!revealed ? (
                     <button
                         onClick={handleReveal}
                         disabled={selected === null}
-                        className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-200 ${selected !== null
-                                ? 'text-black active:scale-[0.98]'
-                                : 'bg-surface text-slate-600 border border-white/5 cursor-not-allowed'
+                        className={`w-full py-3.5 rounded-md font-semibold text-[15px] transition-colors ${selected !== null
+                            ? 'bg-primary text-surface hover:bg-primary-dim'
+                            : 'bg-card text-ink-faint cursor-not-allowed'
                             }`}
-                        style={selected !== null ? { background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)', boxShadow: '0 4px 20px rgba(0,212,255,0.3)' } : undefined}
                     >
                         確認答案
                     </button>
                 ) : (
                     <button
                         onClick={handleNext}
-                        className="w-full py-4 text-black font-bold text-base rounded-2xl active:scale-[0.98] flex items-center justify-center gap-2"
-                        style={{ background: 'linear-gradient(135deg, #00d4ff 0%, #0095b3 100%)', boxShadow: '0 4px 20px rgba(0,212,255,0.3)' }}
+                        className="w-full py-3.5 bg-primary text-surface font-semibold text-[15px] rounded-md hover:bg-primary-dim flex items-center justify-center gap-2"
                     >
-                        {isLast ? '查看結果 🏁' : (
-                            <>下一題 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg></>
+                        {isLast ? '查看結果' : (
+                            <>下一題 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg></>
                         )}
                     </button>
                 )}
             </div>
 
-            {/* Question nav dots */}
+            {/* 題號 dots */}
             <div className="flex flex-wrap gap-1.5 mt-6 justify-center">
                 {questions.map((_, i) => {
                     const ans = answers[i]
                     const done = i < current
                     const ok = ans && ans.selected === ans.correct
+                    const isCurr = i === current
                     return (
                         <div
                             key={i}
-                            className={`w-7 h-7 rounded-lg text-xs flex items-center justify-center font-bold transition-all ${i === current
-                                    ? 'text-black scale-110'
-                                    : done
-                                        ? ok
-                                            ? 'bg-correct/20 text-correct border border-correct/30'
-                                            : 'bg-wrong/20 text-wrong border border-wrong/30'
-                                        : 'bg-surface text-slate-600 border border-white/5'
+                            className={`w-6 h-6 rounded text-[11px] flex items-center justify-center font-semibold transition-all ${isCurr
+                                ? 'bg-primary text-surface'
+                                : done
+                                    ? ok
+                                        ? 'bg-correct/15 text-correct border border-correct/30'
+                                        : 'bg-wrong/15 text-wrong border border-wrong/30'
+                                    : 'bg-card text-ink-faint border border-border'
                                 }`}
-                            style={i === current ? { background: 'linear-gradient(135deg, #00d4ff, #0095b3)', boxShadow: '0 2px 10px rgba(0,212,255,0.4)' } : undefined}
                         >
                             {i + 1}
                         </div>

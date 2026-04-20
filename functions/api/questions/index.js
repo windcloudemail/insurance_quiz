@@ -26,7 +26,7 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   const body = await request.json()
-  const { category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation } = body
+  const { source_number, category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation } = body
 
   if (!question || !option_1 || !option_2 || !option_3 || !option_4 || !answer) {
     return Response.json({ success: false, error: '缺少必要欄位' }, { status: 400 })
@@ -38,10 +38,15 @@ export async function onRequestPost({ request, env }) {
   ).first()
   const nextOrderIndex = (maxResult?.max_idx ?? -1) + 1
 
+  const srcNum = source_number === '' || source_number === undefined || source_number === null
+    ? null
+    : Number(source_number)
+
   const result = await env.DB.prepare(
-    `INSERT INTO questions (category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation, order_index)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO questions (source_number, category, difficulty, question, question_part2, option_1, option_2, option_3, option_4, answer, explanation, order_index)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
+    srcNum,
     category || '外幣保險',
     difficulty || 'medium',
     question, question_part2 || '', option_1, option_2, option_3, option_4,
