@@ -22,6 +22,7 @@ export default function Home() {
   const [mode, setMode] = useState('random')
   const [wrongCount, setWrongCount] = useState(0)
   const [excludeMastered, setExcludeMastered] = useState(false)
+  const [shuffleOptions, setShuffleOptions] = useState(false)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState('')
 
@@ -163,7 +164,7 @@ export default function Home() {
         const j = Math.floor(Math.random() * (i + 1))
         ;[merged[i], merged[j]] = [merged[j], merged[i]]
       }
-      navigate('/quiz', { state: { questions: merged, count: merged.length, category } })
+      navigate('/quiz', { state: { questions: merged, count: merged.length, category, shuffleOptions } })
     } catch (e) {
       setStartError(e.message || '載入失敗')
     } finally {
@@ -374,7 +375,7 @@ export default function Home() {
       </section>
 
       {/* 精熟排除 */}
-      <label className="mb-6 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">
+      <label className="mb-3 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">
         <input
           type="checkbox"
           checked={excludeMastered}
@@ -384,6 +385,20 @@ export default function Home() {
         <div className="flex-1 min-w-0">
           <p className="text-sm text-ink font-medium">排除已精熟的題目</p>
           <p className="text-[11px] text-ink-faint mt-0.5">累積答對 3 次以上的題目暫時不出現，節省時間</p>
+        </div>
+      </label>
+
+      {/* 選項隨機 */}
+      <label className="mb-6 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">
+        <input
+          type="checkbox"
+          checked={shuffleOptions}
+          onChange={e => setShuffleOptions(e.target.checked)}
+          className="mt-0.5 w-4 h-4 accent-primary cursor-pointer"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-ink font-medium">選項隨機排列</p>
+          <p className="text-[11px] text-ink-faint mt-0.5">每題 A/B/C/D 順序打散，避免死記答案位置</p>
         </div>
       </label>
 

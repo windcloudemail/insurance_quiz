@@ -5,14 +5,36 @@ import QuestionCard from '../components/QuestionCard.jsx'
 import OptionButton from '../components/OptionButton.jsx'
 import ExplanationBox from '../components/ExplanationBox.jsx'
 
+// 將題目的 4 個選項隨機打散，answer 欄位同步 remap 保持指向正確選項
+function maybeShuffleOptions(qs, enabled) {
+    if (!enabled) return qs
+    return qs.map(q => {
+        const order = [0, 1, 2, 3]
+        for (let i = 3; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[order[i], order[j]] = [order[j], order[i]]
+        }
+        const opts = [q.option_1, q.option_2, q.option_3, q.option_4]
+        return {
+            ...q,
+            option_1: opts[order[0]],
+            option_2: opts[order[1]],
+            option_3: opts[order[2]],
+            option_4: opts[order[3]],
+            answer: order.indexOf(q.answer - 1) + 1,
+        }
+    })
+}
+
 export default function Quiz() {
     const { state } = useLocation()
     const navigate = useNavigate()
     const count = state?.count ?? 20
     const category = state?.category ?? ''
     const practiceOnly = state?.practiceOnly ?? false
+    const shuffleOptions = state?.shuffleOptions ?? false
 
-    const [questions, setQuestions] = useState(state?.questions ?? [])
+    const [questions, setQuestions] = useState(() => maybeShuffleOptions(state?.questions ?? [], shuffleOptions))
     const [current, setCurrent] = useState(0)
     const [selected, setSelected] = useState(null)
     const [revealed, setRevealed] = useState(false)
@@ -23,7 +45,7 @@ export default function Quiz() {
     useEffect(() => {
         if (state?.questions && state.questions.length > 0) return
         getRandomQuestions(count, category === '全部' ? '' : category)
-            .then(data => { setQuestions(data); setLoading(false) })
+            .then(data => { setQuestions(maybeShuffleOptions(data, shuffleOptions)); setLoading(false) })
             .catch(e => { setError(e.message); setLoading(false) })
     }, [])
 
@@ -74,7 +96,7 @@ export default function Quiz() {
             setSelected(null)
             setRevealed(false)
         } else {
-            navigate('/result', { state: { questions, answers: [...answers], category, practiceOnly } })
+            navigate('/result', { state: { questions, answers: [...answers], category, practiceOnly, shuffleOptions } })
         }
     }
 
