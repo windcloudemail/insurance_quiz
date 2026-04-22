@@ -29,7 +29,7 @@
 ## 專案目錄結構
 
 ```
-exam-quiz/
+insurance_quiz/
 ├── CLAUDE.md                  ← 你現在看的這份文件
 ├── README.md                  ← 給人看的說明
 ├── package.json
