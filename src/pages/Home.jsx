@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCategories, getRandomQuestions, getRandomWrongQuestions, login, getMasteryStats, getMe } from '../lib/api.js'
+import { getCategories, getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions, getWrongPriorityCount, login, getMasteryStats, getMe } from '../lib/api.js'
 
 // 5 段進度配色 — Claude 暖色調
 function progressColor(pct) {
@@ -33,6 +33,7 @@ export default function Home() {
   const [loginErr, setLoginErr] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
   const [masteryMap, setMasteryMap] = useState({})
+  const [wrongPriorityCount, setWrongPriorityCount] = useState(0)
 
   const navigate = useNavigate()
 
@@ -113,6 +114,15 @@ export default function Home() {
       .catch(() => setMasteryMap({}))
   }, [authUsername])
 
+  // 未攻克（錯 > 對）題數：隨分類變動
+  useEffect(() => {
+    if (!authUsername) { setWrongPriorityCount(0); return }
+    const c = category === '全部' ? '' : category
+    getWrongPriorityCount(c)
+      .then(d => setWrongPriorityCount(d?.count ?? 0))
+      .catch(() => setWrongPriorityCount(0))
+  }, [authUsername, category])
+
   const handleCustomCount = (val) => {
     const n = parseInt(val)
     setCustomCount(val)
@@ -132,6 +142,27 @@ export default function Home() {
       setStartError('請先登入再開始練習')
       return
     }
+
+    // 錯題加強模式：固定 20 題、永遠排除精熟、按 (錯-對) DESC 排序
+    if (mode === 'wrong-priority') {
+      setStarting(true)
+      try {
+        const qs = await getWrongPriorityQuestions(20, cat)
+        if (!qs || qs.length === 0) {
+          setStartError('目前沒有需要加強的錯題（錯誤次數都 ≤ 答對次數）')
+          setStarting(false)
+          return
+        }
+        // 錯題加強不打散順序（錯越多必須越前面）、但可套用「選項隨機」
+        navigate('/quiz', { state: { questions: qs, count: qs.length, category, shuffleOptions } })
+      } catch (e) {
+        setStartError(e.message || '載入失敗')
+      } finally {
+        setStarting(false)
+      }
+      return
+    }
+
     const newN = Math.max(0, Number(count) || 0)
     const wrongN = mode === 'mixed' ? Math.max(0, Number(wrongCount) || 0) : 0
     if (newN + wrongN === 0) {
@@ -248,7 +279,8 @@ export default function Home() {
         </form>
       )}
 
-      {/* 題數 */}
+      {/* 題數（錯題加強模式固定 20 題，不顯示） */}
+      {mode !== 'wrong-priority' && (
       <section className="mb-7">
         <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">
           {mode === 'mixed' ? '新題數' : '題數'}
@@ -277,6 +309,7 @@ export default function Home() {
           {customCount && <span className="text-primary text-xs font-mono">{count} 題</span>}
         </div>
       </section>
+      )}
 
       {/* 題本 */}
       <section className="mb-7">
@@ -342,7 +375,7 @@ export default function Home() {
       {/* 組題模式 */}
       <section className="mb-6">
         <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">組題模式</h2>
-        <div className="grid grid-cols-2 gap-2 mb-2.5">
+        <div className="grid grid-cols-3 gap-2 mb-2.5">
           <button
             onClick={() => setMode('random')}
             className={`${tabBase} ${mode === 'random' ? tabActive : tabIdle}`}
@@ -353,9 +386,27 @@ export default function Home() {
             onClick={() => { setMode('mixed'); if (wrongCount === 0) setWrongCount(5) }}
             className={`${tabBase} ${mode === 'mixed' ? tabActive : tabIdle}`}
           >
-            混合錯題複習
+            混合錯題
+          </button>
+          <button
+            onClick={() => setMode('wrong-priority')}
+            className={`${tabBase} ${mode === 'wrong-priority' ? tabActive : tabIdle}`}
+          >
+            錯題加強
           </button>
         </div>
+        {mode === 'wrong-priority' && (
+          <div className="bg-surface border border-border rounded-md px-3 py-2.5">
+            <p className="text-[12px] text-ink-soft leading-relaxed">
+              固定 <span className="text-primary font-semibold">20 題</span>，從你「錯誤次數 &gt; 答對次數」的題中，
+              <span className="font-semibold">錯越多次越前面</span>。對 ≥ 錯即脫離此池。
+            </p>
+            <p className="text-[11px] text-ink-faint mt-1">
+              未攻克題數：<span className="font-mono font-semibold text-primary">{wrongPriorityCount}</span>
+              {cat && <span className="ml-1">（{category} 分類內）</span>}
+            </p>
+          </div>
+        )}
         {mode === 'mixed' && (
           <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-2">
             <span className="text-ink-faint text-xs font-mono shrink-0">+ 錯題</span>
@@ -374,7 +425,8 @@ export default function Home() {
         )}
       </section>
 
-      {/* 精熟排除 */}
+      {/* 精熟排除（錯題加強模式永遠排除，不顯示此選項） */}
+      {mode !== 'wrong-priority' && (
       <label className="mb-3 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">
         <input
           type="checkbox"
@@ -387,6 +439,7 @@ export default function Home() {
           <p className="text-[11px] text-ink-faint mt-0.5">累積答對 3 次以上的題目暫時不出現，節省時間</p>
         </div>
       </label>
+      )}
 
       {/* 選項隨機 */}
       <label className="mb-6 flex items-start gap-3 bg-surface border border-border rounded-md px-4 py-3 cursor-pointer hover:border-border-strong transition-all">

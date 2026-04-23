@@ -34,6 +34,14 @@ export const getRandomQuestions = (count = 20, category = '', excludeMastered = 
 export const getRandomWrongQuestions = (count = 10, category = '', excludeMastered = false) =>
   request(`/questions/random-wrong?count=${count}&category=${encodeURIComponent(category)}${excludeMastered ? '&exclude_mastered=1' : ''}`)
 
+// 錯題加強練習（wrong > right 的題，按 (wrong-right) DESC 排序）
+export const getWrongPriorityQuestions = (count = 20, category = '') =>
+  request(`/questions/wrong-priority?count=${count}&category=${encodeURIComponent(category)}`)
+
+// 未攻克題數（wrong > right 的題數），給 Home 按鈕顯示用
+export const getWrongPriorityCount = (category = '') =>
+  request(`/stats/wrong-priority-count?category=${encodeURIComponent(category)}`)
+
 // 上報答題結果（累加 correct_count / wrong_count）
 export const submitAttempts = (attempts) =>
   request('/attempts', { method: 'POST', body: JSON.stringify(attempts) })

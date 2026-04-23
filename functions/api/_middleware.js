@@ -101,6 +101,7 @@ export async function onRequest(context) {
         const requiresUser =
             (path === '/api/attempts' && isMutation) ||
             (path === '/api/questions/random-wrong') ||
+            (path === '/api/questions/wrong-priority') ||
             (path.startsWith('/api/stats/'))
 
         if (requiresAdmin && role !== 'admin') {
