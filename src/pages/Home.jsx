@@ -154,7 +154,7 @@ export default function Home() {
           return
         }
         // 錯題加強不打散順序（錯越多必須越前面）、但可套用「選項隨機」
-        navigate('/quiz', { state: { questions: qs, count: qs.length, category, shuffleOptions } })
+        navigate('/quiz', { state: { questions: qs, count: qs.length, category, mode: 'wrong-priority', shuffleOptions } })
       } catch (e) {
         setStartError(e.message || '載入失敗')
       } finally {
@@ -195,7 +195,7 @@ export default function Home() {
         const j = Math.floor(Math.random() * (i + 1))
         ;[merged[i], merged[j]] = [merged[j], merged[i]]
       }
-      navigate('/quiz', { state: { questions: merged, count: merged.length, category, shuffleOptions } })
+      navigate('/quiz', { state: { questions: merged, count: merged.length, category, mode, excludeMastered, wrongCount, shuffleOptions } })
     } catch (e) {
       setStartError(e.message || '載入失敗')
     } finally {

@@ -14,7 +14,7 @@ export default function Result() {
         return null
     }
 
-    const { questions, answers, category, practiceOnly, shuffleOptions } = state
+    const { questions, answers, category, practiceOnly, shuffleOptions, mode = 'random', excludeMastered = false, wrongCount = 0 } = state
     const wrongQuestions = questions.filter((q, i) => answers[i]?.selected !== answers[i]?.correct)
     const hasWrong = wrongQuestions.length > 0
 
@@ -148,7 +148,7 @@ export default function Result() {
                         回首頁
                     </button>
                     <button
-                        onClick={() => navigate('/quiz', { state: { questions: wrongQuestions, count: wrongQuestions.length, category, practiceOnly: true, shuffleOptions } })}
+                        onClick={() => navigate('/quiz', { state: { questions: wrongQuestions, count: wrongQuestions.length, category, practiceOnly: true, mode, excludeMastered, wrongCount, shuffleOptions } })}
                         disabled={!hasWrong}
                         className={`py-3 px-1 font-medium text-xs sm:text-sm rounded-md transition-all ${hasWrong
                             ? 'bg-wrong/10 border border-wrong/40 text-wrong hover:bg-wrong/15'
@@ -159,7 +159,7 @@ export default function Result() {
                         {hasWrong ? `練錯題 ${wrongQuestions.length}` : '✓ 全對'}
                     </button>
                     <button
-                        onClick={() => navigate('/quiz', { state: { count: questions.length, category, shuffleOptions } })}
+                        onClick={() => navigate('/quiz', { state: { count: questions.length, category, mode, excludeMastered, wrongCount, shuffleOptions } })}
                         className="py-3 px-1 bg-primary text-surface font-semibold text-xs sm:text-sm rounded-md hover:bg-primary-dim transition-colors"
                     >
                         再練一次

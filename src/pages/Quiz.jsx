@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getRandomQuestions } from '../lib/api.js'
+import { getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions } from '../lib/api.js'
 import QuestionCard from '../components/QuestionCard.jsx'
 import OptionButton from '../components/OptionButton.jsx'
 import ExplanationBox from '../components/ExplanationBox.jsx'
@@ -33,6 +33,9 @@ export default function Quiz() {
     const category = state?.category ?? ''
     const practiceOnly = state?.practiceOnly ?? false
     const shuffleOptions = state?.shuffleOptions ?? false
+    const mode = state?.mode ?? 'random'
+    const excludeMastered = state?.excludeMastered ?? false
+    const wrongCount = state?.wrongCount ?? 0
 
     const [questions, setQuestions] = useState(() => maybeShuffleOptions(state?.questions ?? [], shuffleOptions))
     const [current, setCurrent] = useState(0)
@@ -42,9 +45,41 @@ export default function Quiz() {
     const [loading, setLoading] = useState(!state?.questions)
     const [error, setError] = useState('')
 
+    // 從 Result「再練一次」進來時 state.questions 為空，依 mode 重抽
     useEffect(() => {
         if (state?.questions && state.questions.length > 0) return
-        getRandomQuestions(count, category === '全部' ? '' : category)
+        const cat = category === '全部' ? '' : category
+
+        let fetchPromise
+        if (mode === 'wrong-priority') {
+            // 錯題加強：固定 20 題，永遠排除精熟
+            fetchPromise = getWrongPriorityQuestions(20, cat)
+        } else if (mode === 'mixed') {
+            // 混合錯題：重建 Home.start() 的邏輯（新題 + 錯題 + 去重 + shuffle）
+            const wrongN = Math.max(0, Number(wrongCount) || 0)
+            const newN = Math.max(0, count - wrongN)
+            fetchPromise = Promise.all([
+                newN > 0 ? getRandomQuestions(newN, cat, excludeMastered) : Promise.resolve([]),
+                wrongN > 0 ? getRandomWrongQuestions(wrongN, cat, excludeMastered) : Promise.resolve([]),
+            ]).then(([newQs, wrongQs]) => {
+                const seen = new Set()
+                const merged = [...newQs, ...wrongQs].filter(q => {
+                    if (seen.has(q.id)) return false
+                    seen.add(q.id)
+                    return true
+                })
+                for (let i = merged.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1))
+                    ;[merged[i], merged[j]] = [merged[j], merged[i]]
+                }
+                return merged
+            })
+        } else {
+            // random 或其他：沿用舊行為
+            fetchPromise = getRandomQuestions(count, cat, excludeMastered)
+        }
+
+        fetchPromise
             .then(data => { setQuestions(maybeShuffleOptions(data, shuffleOptions)); setLoading(false) })
             .catch(e => { setError(e.message); setLoading(false) })
     }, [])
@@ -96,7 +131,7 @@ export default function Quiz() {
             setSelected(null)
             setRevealed(false)
         } else {
-            navigate('/result', { state: { questions, answers: [...answers], category, practiceOnly, shuffleOptions } })
+            navigate('/result', { state: { questions, answers: [...answers], category, practiceOnly, shuffleOptions, mode, excludeMastered, wrongCount } })
         }
     }
 
