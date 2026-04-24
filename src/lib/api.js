@@ -100,3 +100,24 @@ export const getMe = () =>
 // 每分類精熟度統計（per-user）：回 [{ category, total, mastered }, ...]
 export const getMasteryStats = () =>
   request('/stats/mastery')
+
+// 取得當前使用者所有的標記（給 Quiz 載入時批次使用）
+// 回 [{ question_id, flagged, flag_note, manual_mastered, updated_at }]
+export const getMarks = () =>
+  request('/marks')
+
+// upsert 單題標記（未提供的欄位保留原值）
+export const updateMark = (questionId, patch) =>
+  request(`/marks/${questionId}`, { method: 'PUT', body: JSON.stringify(patch) })
+
+// 移除單題標記
+export const deleteMark = (questionId) =>
+  request(`/marks/${questionId}`, { method: 'DELETE' })
+
+// 取得所有「有疑義」題目（含完整題目內容）
+export const getFlaggedQuestions = () =>
+  request('/marks/flagged')
+
+// 有疑義題目數（給 Home 入口顯示）
+export const getFlaggedCount = () =>
+  request('/stats/flagged-count')

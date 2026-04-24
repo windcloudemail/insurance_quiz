@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCategories, getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions, getWrongPriorityCount, login, getMasteryStats, getMe } from '../lib/api.js'
+import { getCategories, getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions, getWrongPriorityCount, login, getMasteryStats, getMe, getFlaggedCount } from '../lib/api.js'
 
 // 5 段進度配色 — Claude 暖色調
 function progressColor(pct) {
@@ -34,6 +34,7 @@ export default function Home() {
   const [loggingIn, setLoggingIn] = useState(false)
   const [masteryMap, setMasteryMap] = useState({})
   const [wrongPriorityCount, setWrongPriorityCount] = useState(0)
+  const [flaggedCount, setFlaggedCount] = useState(0)
 
   const navigate = useNavigate()
 
@@ -122,6 +123,14 @@ export default function Home() {
       .then(d => setWrongPriorityCount(d?.count ?? 0))
       .catch(() => setWrongPriorityCount(0))
   }, [authUsername, category])
+
+  // 有疑義題目數：跨分類，登入後一次抓
+  useEffect(() => {
+    if (!authUsername) { setFlaggedCount(0); return }
+    getFlaggedCount()
+      .then(d => setFlaggedCount(d?.count ?? 0))
+      .catch(() => setFlaggedCount(0))
+  }, [authUsername])
 
   const handleCustomCount = (val) => {
     const n = parseInt(val)
@@ -242,7 +251,22 @@ export default function Home() {
             </button>
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {/* 快速入口：有疑義題目 */}
+      {authUsername && (
+        <button
+          onClick={() => navigate('/flagged')}
+          className="w-full mb-7 bg-surface border border-wrong/30 rounded-lg px-4 py-3 flex items-center justify-between hover:border-wrong/60 hover:bg-wrong/5 transition-all text-left"
+        >
+          <span className="text-sm text-ink font-semibold">🚩 有疑義題目</span>
+          <span className="text-[12px] text-wrong font-mono font-semibold">
+            {flaggedCount} 題 →
+          </span>
+        </button>
+      )}
+
+      {!authUsername && (
         <form onSubmit={handleLogin} className="mb-7 bg-surface border border-border rounded-lg p-4">
           <p className="text-ink text-sm mb-3 font-serif font-semibold">登入以開始練習</p>
           <div className="grid grid-cols-2 gap-2 mb-2">

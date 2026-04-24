@@ -102,7 +102,8 @@ export async function onRequest(context) {
             (path === '/api/attempts' && isMutation) ||
             (path === '/api/questions/random-wrong') ||
             (path === '/api/questions/wrong-priority') ||
-            (path.startsWith('/api/stats/'))
+            (path.startsWith('/api/stats/')) ||
+            (path.startsWith('/api/marks'))
 
         if (requiresAdmin && role !== 'admin') {
             return Response.json({ success: false, error: '未經授權的操作，請先以管理員登入' }, { status: 401 })

@@ -18,7 +18,13 @@ export async function onRequestGet({ request, env, data }) {
             FROM questions q
             JOIN user_attempts ua ON ua.question_id = q.id
             WHERE ua.user_id = ?
+              AND q.id NOT IN (
+                  SELECT question_id FROM user_question_marks
+                  WHERE user_id = ? AND manual_mastered = 1
+              )
     `
+    args.push(userId)
+
     if (category) {
         sql += ' AND q.category = ?'
         args.push(category)

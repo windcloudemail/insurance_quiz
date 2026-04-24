@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS user_attempts (
 CREATE INDEX IF NOT EXISTS idx_user_attempts_uq ON user_attempts(user_id, question_id);
 CREATE INDEX IF NOT EXISTS idx_user_attempts_uqc ON user_attempts(user_id, question_id, correct);
 
+-- 使用者對單題的標記：有疑義 / 手動精熟 / 備註
+-- flagged=1 進「有疑義題目」清單；manual_mastered=1 視同精熟，不再出現於 random/wrong-priority/random-wrong
+CREATE TABLE IF NOT EXISTS user_question_marks (
+  user_id          INTEGER NOT NULL,
+  question_id      INTEGER NOT NULL,
+  flagged          INTEGER NOT NULL DEFAULT 0,
+  flag_note        TEXT    NOT NULL DEFAULT '',
+  manual_mastered  INTEGER NOT NULL DEFAULT 0,
+  updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_marks_user_flagged ON user_question_marks(user_id, flagged);
+CREATE INDEX IF NOT EXISTS idx_marks_user_master ON user_question_marks(user_id, manual_mastered);
+
 -- 預設分類範例資料（可刪除）
 INSERT INTO questions (category, question, option_1, option_2, option_3, option_4, answer, explanation)
 VALUES (

@@ -21,6 +21,13 @@ export async function onRequestGet({ request, env, data }) {
         )
     `
 
+    // 手動精熟永遠排除
+    sql += ` AND q.id NOT IN (
+        SELECT question_id FROM user_question_marks
+        WHERE user_id = ? AND manual_mastered = 1
+    )`
+    args.push(userId)
+
     if (excludeMastered) {
         sql += ` AND q.id NOT IN (
             SELECT question_id FROM user_attempts

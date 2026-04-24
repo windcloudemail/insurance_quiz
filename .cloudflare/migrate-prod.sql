@@ -39,3 +39,17 @@ CREATE TABLE IF NOT EXISTS user_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_user_attempts_uq ON user_attempts(user_id, question_id);
 CREATE INDEX IF NOT EXISTS idx_user_attempts_uqc ON user_attempts(user_id, question_id, correct);
+
+-- 使用者對單題的標記：有疑義 / 手動精熟 / 備註
+CREATE TABLE IF NOT EXISTS user_question_marks (
+  user_id          INTEGER NOT NULL,
+  question_id      INTEGER NOT NULL,
+  flagged          INTEGER NOT NULL DEFAULT 0,
+  flag_note        TEXT    NOT NULL DEFAULT '',
+  manual_mastered  INTEGER NOT NULL DEFAULT 0,
+  updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_marks_user_flagged ON user_question_marks(user_id, flagged);
+CREATE INDEX IF NOT EXISTS idx_marks_user_master ON user_question_marks(user_id, manual_mastered);

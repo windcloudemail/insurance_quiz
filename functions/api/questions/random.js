@@ -16,6 +16,15 @@ export async function onRequestGet({ request, env, data }) {
         args.push(category)
     }
 
+    // 手動精熟永遠排除（user 主動標「我會了」即視同精熟，不再出現）
+    if (userId) {
+        sql += ` AND id NOT IN (
+            SELECT question_id FROM user_question_marks
+            WHERE user_id = ? AND manual_mastered = 1
+        )`
+        args.push(userId)
+    }
+
     if (excludeMastered && userId) {
         sql += ` AND id NOT IN (
             SELECT question_id FROM user_attempts
